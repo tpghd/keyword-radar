@@ -4,9 +4,15 @@ import requests
 from datetime import date, timedelta
 import pandas as pd
 
-# ===== 설정 =====
+# ===== 기준 =====
 START_DATE = "2026-01-01"
-KEYWORDS = ["전자담배", "하카전담", "하카", "하카전자담배", "하카매장", "레딜전자담배", "전자담배 액상", "무니코틴 전자담배", "편의점 전자담배", "전자담배 세금", "아이코스", "릴하이브리드"]
+
+# ===== 너가 원하는 "섹션(그룹)" 구성 =====
+GROUPS = {
+    "경쟁사 그룹": ["아이코스", "릴하이브리드", "글로전자담배", "레딜전자담배", "하카"],
+    "자사 그룹": ["하카", "하카전담", "하카매장", "하카전자담배"],
+    "시장 그룹": ["전자담배액상", "편의점전자담배", "궐련형전자담배", "무니코틴전자담배"],
+}
 
 NAVER_CLIENT_ID = os.environ["NAVER_CLIENT_ID"]
 NAVER_CLIENT_SECRET = os.environ["NAVER_CLIENT_SECRET"]
@@ -14,7 +20,8 @@ BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = int(os.environ["TELEGRAM_CHAT_ID"])
 
 
-def fetch_datalab():
+def fetch_datalab(keyword_list):
+    """keywordGroups는 최대 5개라서, 이 함수에는 최대 5개만 넣는 걸 권장."""
     url = "https://openapi.naver.com/v1/datalab/search"
     end_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -22,7 +29,7 @@ def fetch_datalab():
         "startDate": START_DATE,
         "endDate": end_date,
         "timeUnit": "date",
-        "keywordGroups": [{"groupName": kw, "keywords": [kw]} for kw in KEYWORDS],
+        "keywordGroups": [{"groupName": kw, "keywords": [kw]} for kw in keyword_list],
     }
 
     headers = {
@@ -72,7 +79,7 @@ def build_report(data):
     return report
 
 
-def make_report_text(report: pd.DataFrame) -> str:
+def make_section_text(title: str, report: pd.DataFrame) -> str:
     def fmt(d):
         d = pd.to_datetime(d)
         return f"{d.month}월 {d.day}일"
@@ -82,16 +89,20 @@ def make_report_text(report: pd.DataFrame) -> str:
     r["ratio_d_1"] = r["ratio_d_1"].round(2)
     r["pct_change"] = r["pct_change"].round(0)
 
+    # 키워드 순서 유지(입력한 순서대로 나오게)
+    order = {k: i for i, k in enumerate(r["keyword"].tolist())}
+    r = r.sort_values("keyword", key=lambda s: s.map(order))
+
     d2 = fmt(r.iloc[0]["date_d_2"])
     d1 = fmt(r.iloc[0]["date_d_1"])
 
     lines = []
+    lines.append(f"")
     lines.append(f"{d2} 검색 현황")
     for _, row in r.iterrows():
         lines.append(f"{row['keyword']} : {row['ratio_d_2']}")
 
     lines.append("")
-
     lines.append(f"{d1} 검색 현황")
     for _, row in r.iterrows():
         pct = row["pct_change"]
@@ -111,10 +122,23 @@ def send_telegram(text: str):
 
 
 def main():
-    data = fetch_datalab()
-    report = build_report(data)
-    text = make_report_text(report)
-    send_telegram(text)
+    sections = []
+    for group_title, keywords in GROUPS.items():
+        # 만약 어느 그룹이 6개 이상으로 늘어나면, 여기서 5개씩 쪼개는 로직을 추가하면 됨
+        data = fetch_datalab(keywords)
+        report = build_report(data)
+
+        # 출력 순서를 입력한 키워드 순서대로 고정
+        report["keyword"] = pd.Categorical(report["keyword"], categories=keywords, ordered=True)
+        report = report.sort_values("keyword")
+
+        sections.append(make_section_text(group_title, report))
+
+    # 섹션 사이를 구분선으로
+    final_text = "\n\n" + ("-" * 22) + "\n\n"
+    final_text = final_text.join(sections)
+
+    send_telegram(final_text)
 
 
 if __name__ == "__main__":
