@@ -6,7 +6,7 @@ import pandas as pd
 
 # ===== 설정 =====
 START_DATE = "2026-01-01"
-KEYWORDS = ["전자담배", "하카전담", "하카", "하카전자담배", "하카매장"]
+KEYWORDS = ["전자담배", "하카전담", "하카", "하카전자담배", "하카매장", "레딜전자담배", "전자담배 액상", "무니코틴 전자담배", "편의점 전자담배", "전자담배 세금", "아이코스", "릴하이브리드"]
 
 NAVER_CLIENT_ID = os.environ["NAVER_CLIENT_ID"]
 NAVER_CLIENT_SECRET = os.environ["NAVER_CLIENT_SECRET"]
