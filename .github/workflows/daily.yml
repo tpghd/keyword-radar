@@ -2,7 +2,7 @@ name: Daily Datalab Telegram Report
 
 on:
   schedule:
-    - cron: "30 0 * * *"   # 09:30 KST = 00:30 UTC
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:
